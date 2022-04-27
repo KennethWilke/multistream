@@ -12,4 +12,3 @@ license = "MIT"
 easy-tokio-rustls = { path = "../easy-tokio-rustls" }
 tokio = { version = "1.17.0", features = ["full"] }
 anyhow = "1.0"
-thiserror = "1.0"
