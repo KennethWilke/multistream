@@ -1,3 +1,6 @@
 /target
 Cargo.lock
 /examples/client/target/
+examples/server/cert.pem
+examples/server/privkey.pem
+examples/server/target

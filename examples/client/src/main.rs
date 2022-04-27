@@ -7,7 +7,6 @@ const HTTP_REQUEST: &[u8] = b"GET / HTTP/1.1\r\nHost: suchprogramming.com\r\n\r\
 
 #[tokio::main]
 pub async fn main() -> Result<()> {
-
     // Will use TLS unless given tcp://, unix:// or other handled prefixes
     let mut client = Client::connect("suchprogramming.com:443").await?;
     // let mut client = Client::connect("tls://suchprogramming.com:443").await?; # Same as above
@@ -36,4 +35,3 @@ pub async fn main() -> Result<()> {
 
     */
 }
-

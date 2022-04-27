@@ -1,50 +1,51 @@
 use anyhow::Result;
-use easy_tokio_rustls::{TlsListener, TlsStream};
+use easy_tokio_rustls::{TlsListener, TlsServer, TlsStream};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpListener, TcpStream, UnixListener, UnixStream},
 };
 
-use easy_tokio_rustls::{resolve_address, TlsServer};
-
 use crate::DEFAULT_BUFFER_SIZE;
 
+/// Represents a server! Get ready for all those new connections
 pub struct Server {
+    /// The address being listened to
     pub address: String,
+    /// Provides access to the underlying stream, so you can work beyond the
+    /// simple abstraction
     pub listener: StreamListener,
-    pub buffer_size: usize,
 }
 
 impl Server {
-    pub async fn listen<T>(address: T, cert_and_key: Option<CertAndKey>) -> Result<Server>
+    /// Create a new server, will be listening and ready to go!
+    /// If a `cert_and_key` is provided, TLS will be used
+    /// If address begins with unix://, Unix socket will be used
+    /// Otherwise, TCP socket type will be assumed
+    pub async fn listen<T>(address: T, cert_and_key: Option<CertAndKeyFilePaths>) -> Result<Server>
     where
         T: ToString,
     {
         use StreamListener::*;
         let address = address.to_string();
         let listener = match &address {
-            addr if addr.starts_with("tcp://") => {
-                let addr = resolve_address(&addr[6..]).await?;
-                Tcp(TcpListener::bind(addr).await?)
-            }
-            host if host.starts_with("tls://") && cert_and_key.is_some() => {
-                let host = resolve_address(&host[6..]).await?;
-                let cert_file = &cert_and_key.as_ref().unwrap().cert;
-                let key_file = &cert_and_key.as_ref().unwrap().key;
-                Tls(TlsServer::new(host, cert_file, key_file)
-                    .await?
-                    .listen()
-                    .await?)
-            }
             path if path.starts_with("unix://") => Unix(UnixListener::bind(&path[7..])?),
             // A nice default
             id_like_to_think_tls if cert_and_key.is_some() => {
                 match id_like_to_think_tls.contains("://") {
                     true => {
                         let addr = id_like_to_think_tls.split_once("://").unwrap().1;
-                        Tcp(TcpListener::bind(addr).await?)
+                        let cert_file = &cert_and_key.as_ref().unwrap().cert;
+                        let key_file = &cert_and_key.as_ref().unwrap().key;
+                        let server = TlsServer::new(addr, cert_file, key_file).await?;
+                        Tls(server.listen().await?)
                     }
-                    _ => Tcp(TcpListener::bind(id_like_to_think_tls).await?),
+                    false => {
+                        let cert_file = &cert_and_key.as_ref().unwrap().cert;
+                        let key_file = &cert_and_key.as_ref().unwrap().key;
+                        let server =
+                            TlsServer::new(id_like_to_think_tls, cert_file, key_file).await?;
+                        Tls(server.listen().await?)
+                    }
                 }
             }
             fine_assumed_tcp => match fine_assumed_tcp.contains("://") {
@@ -55,14 +56,11 @@ impl Server {
                 _ => Tcp(TcpListener::bind(fine_assumed_tcp).await?),
             },
         };
-        let server = Server {
-            address,
-            listener,
-            buffer_size: DEFAULT_BUFFER_SIZE,
-        };
+        let server = Server { address, listener };
         Ok(server)
     }
 
+    /// Accept connection from a new client
     pub async fn accept(&mut self) -> Result<StreamClient> {
         let (stream, address) = match &self.listener {
             StreamListener::Tcp(listener) => {
@@ -83,37 +81,38 @@ impl Server {
     }
 }
 
+/// This is the underlying listener handle for the server
 pub enum StreamListener {
     Tcp(TcpListener),
     Tls(TlsListener),
     Unix(UnixListener),
 }
 
+/// This structure represents a connected client
 pub struct StreamClient {
     pub address: String,
     pub stream: ClientStream,
 }
 
 impl StreamClient {
+    /// Sends the provided buffer to the connected client
     pub async fn send(&mut self, data: &[u8]) -> Result<()> {
         use ClientStream::*;
         match &mut self.stream {
             Tcp(stream) => {
                 stream.write_all(data).await?;
-                stream.flush().await?
             }
             Tls(stream) => {
                 stream.write_all(data).await?;
-                stream.flush().await?
             }
             Unix(stream) => {
                 stream.write_all(data).await?;
-                stream.flush().await?
             }
         };
         Ok(())
     }
 
+    /// Receives data from the connected client
     pub async fn recv(&mut self) -> Result<Vec<u8>> {
         use ClientStream::*;
 
@@ -127,24 +126,32 @@ impl StreamClient {
     }
 }
 
+/// Holds the underlying stream handle for a connected client
 pub enum ClientStream {
+    /// Handle for a TCP connected client
     Tcp(TcpStream),
+    /// Handle for a TLS connected client
     Tls(Box<TlsStream<TcpStream>>),
+    /// Handle for a Unix socket connected client
     Unix(UnixStream),
 }
 
-pub struct CertAndKey {
+/// Simple structure that holds file paths to the TLS certificate and key
+pub struct CertAndKeyFilePaths {
+    /// Path to TLS certificate file
     pub cert: String,
+    /// Path to TLS key file
     pub key: String,
 }
 
-impl CertAndKey {
+impl CertAndKeyFilePaths {
+    /// Creates a new Cert/Key file path pair
     pub fn new<T, U>(cert: T, key: U) -> Self
     where
         T: ToString,
         U: ToString,
     {
-        CertAndKey {
+        CertAndKeyFilePaths {
             cert: cert.to_string(),
             key: key.to_string(),
         }
