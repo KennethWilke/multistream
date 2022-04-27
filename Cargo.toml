@@ -9,6 +9,6 @@ license = "MIT"
 
 
 [dependencies]
-easy-tokio-rustls = { path = "../easy-tokio-rustls" }
+easy-tokio-rustls = "0.1.2"
 tokio = { version = "1.17.0", features = ["full"] }
 anyhow = "1.0"
