@@ -3,6 +3,7 @@ name = "multistream"
 version = "0.1.0"
 authors = ["Kenneth Wilke <kenneth.wilke@gmail.com>"]
 edition = "2021"
+description = "Provides simple abstractions for tcp/tls/unix socket servers and clients in tokio"
 readme = "README.md"
 repository = "https://github.com/KennethWilke/multistream"
 license = "MIT"
